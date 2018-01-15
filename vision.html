@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html>
     <head>
+
+        <script src="./build/tracking-min.js"></script>
+        <script src="./build/data/face-min.js"></script>
         <style>
-            body {
-                color:#CCCCCC;
-            }
             #c2 {
                 background-image: url('./foo.png');
                 background-repeat : no-repeat;
@@ -15,8 +15,17 @@
             }
         </style>
         <script type="text/javascript">
-            var processor;
-            processor.blah = "1";
+            var processor={};
+            //pixel 저장을 위한 배열
+            var pixelArray = new Array();
+            var i_arr = 0; //pixel 배열을 위한 인덱스
+
+            var Angle; // global variable로 선언을 해봄...
+
+
+
+
+
             processor.doLoad = function() {
                 this.video = document.getElementById('video');
                 this.c1 = document.getElementById('c1');
@@ -29,6 +38,286 @@
                     self.height = self.video.videoHeight/2;
                     self.timerCallback();
                 },false)//,로 돼있는데 ;로 함
+
+
+                // image 부분 써봄
+                
+                this.c3 = document.getElementById('c3');
+                this.ctx3 = this.c3.getContext('2d');
+                this.image = document.getElementById('image');
+                this.ctx3.drawImage(image,0,0,this.c3.width,this.c3.height);
+
+                this.imgData = this.ctx3.getImageData(0,0,this.c3.width, this.c3.height);
+                console.log(this.ctx3+ " is...");
+                /*
+                //image inverting 코드
+                for(let i=0; i<this.imgData.data.length; i+=4) {
+                    this.imgData.data[i] = 255-this.imgData.data[i];
+                    this.imgData.data[i+1] = 255-this.imgData.data[i+1];
+                    this.imgData.data[i+2] = 255-this.imgData.data[i+2];
+                }*/
+                this.ctx3.putImageData(this.imgData,0,0);
+
+                //마우스 이벤트 관련 (c3에다가 함.)
+                let ctx3 = this.ctx3; //function 내에서는 this.ctx3가 인식이 안 됨.
+                var color = document.getElementById('color');
+                function pick(event) {
+                    let x = event.layerX;
+                    let y = event.layerY;
+                    let pixel = ctx3.getImageData(x,y,1,1);
+                    let data = pixel.data;
+                    let rgba = 'rgba('+data[0]+", "+data[1]+", "+data[2]+", "+(data[3]/255)+')';
+                    color.style.background = rgba;
+                    color.textContent = rgba;
+                }
+                //c3를 마우스 이벤트 발생 대상 이미지로 정함
+                c3.addEventListener('mousemove',pick,false); 
+
+                //template pixel을 this.template_pixel에다가 받아오는 부분.
+                this.c4 = document.getElementById('c4');
+                this.ctx4 = this.c4.getContext('2d');
+                this.template = document.getElementById("template");
+                this.ctx4.drawImage(template,0,0,this.template.width, this.template.height);
+                this.template_pixel = this.ctx4.getImageData(0,0,this.c4.width, this.c4.height);
+                
+                let ctx4 = this.ctx4;
+                function pick_template(event) {
+                    let x = event.layerX;
+                    let y = event.layerY;
+                    let pixel = ctx4.getImageData(x,y,1,1);
+                    let data = pixel.data;
+                    let rgba = 'rgba('+data[0]+", "+data[1]+", "+data[2]+", "+(data[3]/255)+")";
+                    color.style.background = rgba;
+                    color.textContent = rgba;
+                }
+                c4.addEventListener('mousemove',pick_template,false);
+                
+                //console.log(white);
+                //console.log(black);
+
+                //this.template_pixel = this.ctx4.getimageData(0,0,this.c4.width, this.c4.height);
+                //위:width 35, height 26
+                //width 320, height 192
+
+                //c1이나 c3이 첫번째 for문 자리에 들어감. (template를 찾는 대상 이미지임)
+                
+                let frame_matrix = new Array();
+                let frame = this.ctx3.getImageData(0,0,this.c3.width,this.c3.height); //frame을 ctx3걸로 할려고 
+                for(let m = 0; m<this.c3.width; m++) { // frame_matrix[3]은 3th column으로
+                    frame_matrix[m] = new Array();
+                    for(let mm = 0; mm<this.c3.height; mm++) {
+                        frame_matrix[m][mm] = new Array();
+                        frame_matrix[m][mm][0] = frame.data[4*m+(this.c3.width)*mm*4]; //fr_mat[3][1]=3+1*320(width)으로
+                        frame_matrix[m][mm][1] = frame.data[4*m+(this.c3.width)*mm*4+1];
+                        frame_matrix[m][mm][2] = frame.data[4*m+(this.c3.width)*mm*4+2];
+                        frame_matrix[m][mm][3] = frame.data[4*m+(this.c3.width)*mm*4+3];
+
+                    }
+                }
+
+                let template_matrix = new Array();
+                for(let n = 0; n<this.c4.width; n++) {
+                    template_matrix[n] = new Array();
+                    for(let nn=0; nn<this.c4.height; nn++) {
+                        template_matrix[n][nn] = new Array();
+                        template_matrix[n][nn][0] = this.template_pixel.data[4*n+(this.c4.width)*nn*4];
+                        template_matrix[n][nn][1] = this.template_pixel.data[4*n+(this.c4.width)*nn*4+1];
+                        template_matrix[n][nn][2] = this.template_pixel.data[4*n+(this.c4.width)*nn*4+2];
+                        template_matrix[n][nn][3] = this.template_pixel.data[4*n+(this.c4.width)*nn*4+3];
+                        
+                    }
+                }
+
+                // template에서 흰색과 검은색의 비율 조사
+                function FuncWhite(pixel) {
+                    if(pixel[0]>175 && pixel[1]>180 && pixel[2]>200) { // ★ 잘 나오는 threshold
+                        return "true"
+                    }
+                    else {
+                        return "false"
+                    }
+                }
+
+                function FuncBlack(pixel) {
+                    if(pixel[0]>60 && pixel[0]<150 && pixel[1]>60 && pixel[1]<150 && pixel[2]>60 && pixel[2]<150) { //★ 잘 나오는 threshold
+                        return "true"
+                    }
+                    else{
+                        return "false"
+                    }
+                }
+                console.log(template_matrix.length);
+                console.log(template_matrix[0].length)
+
+                var white = 0;
+                var black = 0;
+                for(let a=0; a<template_matrix.length;a++) { // width
+                    for(let b=0; b<template_matrix[0].length;b++) { // height
+                        if(FuncWhite(template_matrix[a][b])=="true"){
+                            white = white + 1;
+                            this.ctx4.fillStyle='orange';
+                            this.ctx4.fillRect(a,b,1,1); // 제대로 된 위치에 채워짐
+                        }
+                        if(FuncBlack(template_matrix[a][b])=="true"){
+                            black = black + 1;
+                            this.ctx4.fillStyle="red";
+                            this.ctx4.fillRect(a,b,1,1); //제대로가 아닌 위치에 채워짐
+                        }
+                    }
+                }
+                console.log(white/(template_matrix.length * template_matrix[0].length));
+                console.log(black/(template_matrix.length * template_matrix[0].length));
+
+
+                var SAD;
+                minSAD = 1000000;
+                //loop through the search image
+                for(var x = 0; x<this.c3.height-this.c4.height; x++) {
+                    for(var y = 0; y<this.c3.width-this.c4.width; y++) {
+                        SAD = 0;
+                        //loop through the template image
+                        for(let j = 0; j<this.c4.height; j++) {
+                            for(let i = 0; i<this.c4.width; i++) {
+                                var pixel_search = frame_matrix[y+i][x+j];
+                                var grey_search = (frame_matrix[y+i][x+j][0]+frame_matrix[y+i][x+j][1]+frame_matrix[y+i][x+j][2])/3;
+                                var pixel_template = template_matrix[i][j];
+                                var grey_template = (template_matrix[i][j][0]+template_matrix[i][j][1]+template_matrix[i][j][2])/3;
+
+                                SAD += Math.abs(grey_search-grey_template);
+                            }
+                        }
+                        //save the best found position
+                        if(minSAD>SAD) {
+                            minSAD = SAD;
+                            var bestWidth = y;
+                            var bestHeight = x;
+                            var bestSAD = SAD;
+                        }
+                    }
+                }
+                //ctx3.strokeRect(y,x,this.c4.width,this.c4.height);
+                ctx3.strokeStyle='orange';
+                ctx3.strokeRect(bestWidth,bestHeight,this.c4.width,this.c4.height);
+                //Find the minimum value in SAD_arr matrix
+
+                // tracking.js 라이브러리 적용 부분
+
+                var tracker = new tracking.ObjectTracker('face');
+                tracker.setInitialScale(4);
+                tracker.setStepSize(1.2);
+                tracker.setEdgesDensity(0.1);
+
+                tracking.track('#video',tracker,{camera:false});
+                // this.ctx1이 인식이 안 돼서
+                var ctx1 = this.ctx1;
+                var c1 = this.c1;
+                var center_face_x;
+                var center_face_y;
+                
+            
+                
+                function ctx1_to_matrix(c1_frame) {
+                    let c1_matrix = new Array();
+
+                    for(let m = 0; m<this.video.videoWidth/2; m++) {
+                        c1_matrix[m] = new Array();
+                        for(let mm = 0; mm<this.video.videoHeight/2; mm++) {
+                            c1_matrix[m][mm] = new Array();
+                            c1_matrix[m][mm][0] = c1_frame.data[4*m+this.video.videoWidth/2*mm*4];
+                            c1_matrix[m][mm][1] = c1_frame.data[4*m+this.video.videoWidth/2*mm*4+1];
+                            c1_matrix[m][mm][2] = c1_frame.data[4*m+this.video.videoWidth/2*mm*4+2];
+                            c1_matrix[m][mm][3] = c1_frame.data[4*m+this.video.videoWidth/2*mm*4+3];
+                        }
+                    }
+                    return c1_matrix;
+                }
+
+
+                tracker.on('track',function(event){
+                    //ctx1.clearRect(0,0,c1.width, c1.height);
+
+                    event.data.forEach(function(rect) {
+                        
+                        ctx1.drawImage(this.video,0,0,this.video.videoWidth/2, this.video.videoHeight/2);
+
+                        //위 : 일단 실시간으로 video frame을 이미지에 그리는 부분
+
+                        ctx1.strokeStyle = '#a64ceb';
+                        //console.log("x: "+(rect.x/2)+", y: "+(rect.y/2));
+                        ctx1.strokeRect(rect.x/2, rect.y/2, rect.width/2, rect.height/2);
+                        ctx1.font = '11px Helvetica';
+                        ctx1.fillStyle = "#fff";
+                        //ctx1.fillText('x: '+rect.x/2+'px',rect.x/2+rect.width/2+5,rect.y/2+11);
+                        //ctx1.fillText('y: '+rect.y/2+'px',rect.x/2+rect.width/2+5, rect.y/2+22);
+                        center_face_x = (rect.x/2)+(rect.width/2/2);
+                        center_face_y = (rect.y/2)+(rect.height/2/2);
+
+                        ctx1.fillText("("+center_face_x+","+center_face_y+")",center_face_x,center_face_y);
+
+                        // 두 벡터 사이의 각도 구하는 함수.
+                        function angle_bet_vecs(vec1, vec2) {
+                            let v1_len = Math.sqrt(vec1[0]*vec1[0]+vec1[1]*vec1[1]);
+                            let v2_len = Math.sqrt(vec2[0]*vec2[0]+vec2[1]*vec2[1]);
+                            let inner_product = vec1[0]*vec2[0] + vec1[1]*vec2[1];
+                            return Math.acos(inner_product/v1_len/v2_len)*180/Math.PI; // 도 단위로 리턴함.
+                        }
+                        Angle = angle_bet_vecs([currentMouse_x-center_face_x, (-1)*(currentMouse_y-center_face_y)],[0,-1]);
+                        console.log("angle:"+Angle);
+
+
+                        let frame = ctx1.getImageData(0,0,this.video.videoWidth/2, this.video.videoHeight/2);
+                        c1_matrix = ctx1_to_matrix(frame);
+
+                        for(let a = Math.ceil(center_face_x); a<c1_matrix.length; a++) { // width
+                            for(let b = Math.ceil(center_face_y+rect.height/4) ; b<c1_matrix[0].length;b++) { // height
+                                if(FuncWhite(c1_matrix[a][b])=="true") {
+                                    ctx1.fillStyle = 'orange';
+                                    //ctx1.fillRect(a,b,1,1);
+                                    // 색깔이 흰색인데 각도가 30도 이하이면 rogo이다
+                                    if(angle_bet_vecs([a-center_face_x,(-1)*(b-center_face_y)],[0,-1])>0 && angle_bet_vecs([a-center_face_x,(-1)*(b-center_face_y)],[0,-1])<30){
+                                        ctx1.fillStyle="orange";
+                                        ctx1.fillRect(a,b,1,1);
+                                    }
+                                }
+                                if(FuncBlack(c1_matrix[a][b])=="true") {
+                                    ctx1.fillStyle = "red";
+                                    //ctx1.fillRect(a,b,1,1);
+                                }
+
+                            }
+
+                        }
+
+
+                    });
+                });
+                
+                // face하고 rogo사이의각도를 구하기 위한 마우스 이벤트 함수
+                var currentMouse_x;
+                var currentMouse_y;
+                function clickclick(event) {
+                    currentMouse_x = event.layerX;
+                    currentMouse_y = event.layerY;
+                    
+                    // line으로 
+                    ctx1.beginPath();
+                    ctx1.moveTo(center_face_x,center_face_y);
+                    ctx1.lineTo(currentMouse_x, currentMouse_y);
+                    ctx1.stroke();
+                    ctx1.fillText("("+currentMouse_x+","+currentMouse_y+")",currentMouse_x,currentMouse_y);
+                }
+                c1.addEventListener('mousemove',clickclick,false);
+
+                
+                // 두 벡터 사이의 각도 구하는 함수.
+                function angle_bet_vecs(vec1, vec2) {
+                    let v1_len = Math.sqrt(vec1[0]*vec1[0]+vec1[1]*vec1[1]);
+                    let v2_len = Math.sqrt(vec2[0]*vec2[0]+vec2[1]*vec2[1]);
+                    let inner_product = vec1[0]*vec2[0] + vec1[1]*vec2[1];
+                    return Math.acos(inner_product/v1_len/v2_len)*180/Math.PI; // 도 단위로 리턴함.
+                }
+                console.log("angle:"+angle_bet_vecs([currentMouse_x-center_face_x, currentMouse_y-center_face_y],[0,-1]));
+
             },
 
             processor.timerCallback = function timerCallback() {
@@ -43,34 +332,238 @@
             }, // 이것도 ,를 ;로함
 
             processor.computeFrame = function computeFrame() {
+                //전역변수 사용하는 코드로 아래 두 줄 수정해봄
+                //this.ctx1.drawImage(this.video,0,0,this.width,this.height);
+                //let frame = this.ctx1.getImageData(0,0,this.width,this.height);
+
                 this.ctx1.drawImage(this.video,0,0,this.width,this.height);
                 let frame = this.ctx1.getImageData(0,0,this.width,this.height);
-                let l = frame.data.length/4;
 
-                for(let i =0; i<l; i++) {
-                    let r = frame.data[i*4+0];
-                    let g = frame.data[i*4+1];
-                    let b = frame.data[i*4+2];
-                    if(g>100 && r>100 && b<43)
-                        frame.data[i*4+3] = 0;
-                    //추가
-                    frame.data[i*4+0] = (r+g+b)/3;
-                    frame.data[i+4+1] = (r+g+b)/3;
-                    frame.data[i*4+2] = (r+g+b)/3;
+
+                //frame별로 데이터 얻어오는 것 테스트
+                // frame.data를 바로 pixelArray[i_arr]의 값으로 선언하는 게 아니라
+                //값을 복사하여서 pixelArray[i_arr]의 배열이 그 값을 가지게 해야 함
+
+                //pixelArray[i_arr] = frame.data; //i_arr번째 칸에 frame.data를 담음
+                /*
+                // background subtraction
+                pixelArray[i_arr] = new Array();
+                for(let x=0; x<frame.data.length; x++){
+                    pixelArray[i_arr][x] =frame.data[x];
                 }
+                let Diff;
+
+                if(i_arr>0) {
+
+                    for(let k=0; k<frame.data.length; k+=4) {
+                        
+                        let r_diff = pixelArray[i_arr-1][k]-pixelArray[i_arr][k];
+                        let g_diff = pixelArray[i_arr-1][k+1]-pixelArray[i_arr][k+1];
+                        let b_diff = pixelArray[i_arr-1][k+2]-pixelArray[i_arr][k+2];
+                        Diff = Math.abs(r_diff)+Math.abs(g_diff)+Math.abs(b_diff)
+                        //console.log(k+":"+Diff);
+                        
+                        if(Diff>45) {
+                            console.log(pixelArray[i_arr][k]);
+                            frame.data[k]=255;
+                            console.log(pixelArray[i_arr][k]); //pixelArray값이 변하지 않았는지 확인.
+                            frame.data[k+1]=0;
+                            frame.data[k+2]=0;
+                        }
+                    }
+                }
+                i_arr++;
+                */
+                /*
+                for (let i=0; i<frame.data.length; i+=4) {
+
+                    var avg = (frame.data[i]+frame.data[i+1]+frame.data[i+2])/3;
+                    frame.data[i] = avg;
+                    frame.data[i+1] = avg;
+                    frame.data[i+2] = avg;
+
+                }
+                */
+
+                //this.template_pixel = this.ctx4.getimageData(0,0,this.c4.width, this.c4.height);
+                //위:width 35, height 26
+                //width 320, height 192
+
+                //c1이나 c3이 첫번째 for문 자리에 들어감. (template를 찾는 대상 이미지임)
+                
+                //******************* 여기부터 template matching코드인데, 아마도 안 쓸 예정.
+                
+                let frame_matrix = new Array();
+                for(let m = 0; m<this.width; m++) { // frame_matrix[3]은 3th column으로
+                    frame_matrix[m] = new Array();
+                    for(let mm = 0; mm<this.height; mm++) {
+                        frame_matrix[m][mm] = new Array();
+                        frame_matrix[m][mm][0] = frame.data[4*m+(this.width)*mm*4]; //fr_mat[3][1]=3+1*320(width)으로
+                        frame_matrix[m][mm][1] = frame.data[4*m+(this.width)*mm*4+1];
+                        frame_matrix[m][mm][2] = frame.data[4*m+(this.width)*mm*4+2];
+                        frame_matrix[m][mm][3] = frame.data[4*m+(this.width)*mm*4+3];
+
+                    }
+                }
+                /*
+                let template_matrix = new Array();
+                for(let n = 0; n<this.c4.width; n++) {
+                    template_matrix[n] = new Array();
+                    for(let nn=0; nn<this.c4.height; nn++) {
+                        template_matrix[n][nn] = new Array();
+                        template_matrix[n][nn][0] = this.template_pixel.data[4*n+(this.c4.width)*nn*4];
+                        template_matrix[n][nn][1] = this.template_pixel.data[4*n+(this.c4.width)*nn*4+1];
+                        template_matrix[n][nn][2] = this.template_pixel.data[4*n+(this.c4.width)*nn*4+2];
+                        template_matrix[n][nn][3] = this.template_pixel.data[4*n+(this.c4.width)*nn*4+3];
+                        
+                    }
+                }
+
+                var SAD;
+                minSAD = 1000000;
+                //loop through the search image
+                for(var x = 0; x<this.height-this.c4.height; x++) {
+                    for(var y = 0; y<this.width-this.c4.width; y++) {
+                        SAD = 0;
+                        //loop through the template image
+                        for(let j = 0; j<this.c4.height; j++) {
+                            for(let i = 0; i<this.c4.width; i++) {
+                                var pixel_search = frame_matrix[y+i][x+j];
+                                var grey_search = (frame_matrix[y+i][x+j][0]+frame_matrix[y+i][x+j][1]+frame_matrix[y+i][x+j][2])/3;
+                                var pixel_template = template_matrix[i][j];
+                                var grey_template = (template_matrix[i][j][0]+template_matrix[i][j][1]+template_matrix[i][j][2])/3;
+
+                                SAD += Math.abs(grey_search-grey_template);
+                            }
+                        }
+                        //save the best found position
+                        if(minSAD>SAD) {
+                            minSAD = SAD;
+                            var bestWidth = y;
+                            var bestHeight = x;
+                            var bestSAD = SAD;
+                        }
+                    }
+                }
+                //console.log(bestWidth+", "+bestHeight); // y: 285, x: 166 / (template 35 26)
+                //console.log("width: "+this.c1.width+" height: "+this.c1.height);
+                this.ctx1.strokeStyle='red';
+                this.ctx1.strokeRect(bestWidth,bestHeight,this.c4.width,this.c4.height);
+                //Find the minimum value in SAD_arr matrix
+                */
+
+
+                function FuncWhite(pixel) {
+                    if(pixel[0]>175 && pixel[1]>180 && pixel[2]>200) {
+                        return "true";
+                    } else {
+                        return "false";
+                    }
+                }
+
+                function FuncBlack(pixel) {
+                    if(pixel[0]>60 && pixel[0]<150 && pixel[1]>60 && pixel[1]<150 && pixel[2]>60 && pixel[2]<150) {
+                        return "true"
+                    }
+                    else {
+                        return "false"
+                    }
+                }
+
+                for(let a = 0; a<frame_matrix.length; a++)  { // width
+                    for(let b = 0; b<frame_matrix[0].length; b++) { // height
+                        if(FuncWhite(frame_matrix[a][b])=="true") {
+                            this.ctx1.fillStyle = 'orange';
+                            //this.ctx1.fillRect(a,b,1,1);
+                        }
+                        if(FuncBlack(frame_matrix[a][b])=="true") {
+                            this.ctx1.fillStyle = 'red';
+                            //this.ctx1.fillRect(a,b,1,1);
+                        }
+                    }
+                }
+
+
+                //tracking.js 라이브러리 적용 부분
+                /*
+                var tracker = new tracking.ObjectTracker('face');
+                tracker.setInitialScale(4);
+                tracker.setStepSize(1);
+                tracker.setEdgesDensity(0.1);
+
+                tracking.track('#video',tracker,{camera:false});
+                // this.ctx1이 인식이 안 돼서
+                var ctx1 = this.ctx1;
+                var c1 = this.c1;
+                tracker.on('track',function(event){
+                    ctx1.clearRect(0,0,c1.width, c1.height);
+
+                    event.data.forEach(function(rect) {
+                        ctx1.strokeStyle = '#a64ceb';
+                        console.log("x: "+(rect.x/2)+", y: "+(rect.y/2));
+                        ctx1.strokeRect(rect.x/2, rect.y/2, rect.width/2, rect.height/2);
+                        ctx1.font = '11px Helvetica';
+                        ctx1.fillStyle = "#fff";
+                        ctx1.fillText('x: '+rect.x/2+'px',rect.x/2+rect.width/2+5,rect.y/2+11);
+                        ctx1.fillText('y: '+rect.y/2+'px',rect.x/2+rect.width/2+5, rect.y/2+22);
+                    });
+                });
+
+                */
                 this.ctx2.putImageData(frame,0,0);
+
                 return;
             }
+
+            // 아래부분 : 그렇게 하니까 작동이 안 됨
+            /*
+            document.getElementById("image").onload = function() {
+                
+                var c3 = document.getElementById("c3"); 
+                var ctx3 = c3.getContext('2d');
+                var image = document.getElementById("image");
+                ctx3.drawImage(image,0,0);
+                var imgData = ctx3.getImageData(0,0,c3.width, c3.height);
+
+                var j;
+                for (j=0; j<imgData.data.length; j+=4) {
+                    imgData.data[j] = 255-imgData.data[j];
+                    imgData.data[j+1] = 255-imgData.data[j+1];
+                    imgData.data[j+2] = 255-imgData.data[j+2];
+                }
+                ctx3.putImageData(imgData,0,0);
+                //단순한 그림
+                var canvas = document.getElementById("c3");
+                var ctx3 = canvas.getContext('2d');
+                ctx.beginPath();
+                ctx.arc(95,50,40,0,2*Math.PI);
+                ctx.stroke();
+
+            }*/
         </script>
     </head>
 
-    <body onload = "processor.doLoad()">
+    <body onload="processor.doLoad()">
         <div>
-            <video id = "video" src = "./video.ogv" controls="true"/>
+            <video id = "video" src = "./peopleVideo4.mp4" controls="true"/>
         </div>
         <div>
-            <canvas id = "c1" width = "160" height = "96"></canvas>
-            <canvas id = "c2" width = "160" height = "96"></canvas>
+            <canvas id = "c1" width = "320" height = "192"></canvas>
+            <canvas id = "c2" width = "320" height = "192"></canvas>
+            <br>
+            <p>left : ctx1 / right : ctx2</p>
+            <img id = "image" src="./picture/arbitrary3.JPG" width="320" height="192"></img> 
+            <canvas id = "c3" width="320" height="192"></canvas>
+            
+            <div id="length">ddd</div>
+            <br>
+            <img id = "template" src="./template/test/test8.JPG"></img>
+            <canvas id = "c4" width = "55" height="43"></canvas>
+            <br><br>
+            <div id="color">~~~</div>
+            <p id="minjoo">!!</p>
         </div>
+
+
     </body>
 </html>
